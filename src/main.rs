@@ -1,3 +1,6 @@
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
+use std::iter::once;
 use std::ops::Range;
 
 #[derive(Default)]
@@ -47,42 +50,42 @@ fn get_longest_correct_cyclic_substring(s: impl AsRef<str>) -> String
     }
     let triple_s = format!("{s}{s}{s}");
 
-    let mut bracket_stack = Vec::with_capacity(s_len * 3);
-    let mut range_counter = RangeCounter::default();
-    for (symbol, next_idx) in triple_s.chars().zip(1usize..) {
-        match symbol {
-            ')' => {
-                if bracket_stack.pop() != Some(PendingBracket::Round) {
-                    range_counter.on_brace_mismatch(next_idx);
-                    continue;
-                }
-            }
-            ']' => {
-                if bracket_stack.pop() != Some(PendingBracket::Square) {
-                    range_counter.on_brace_mismatch(next_idx);
-                    continue;
-                }
-            }
-            '}' => {
-                if bracket_stack.pop() != Some(PendingBracket::Curly) {
-                    range_counter.on_brace_mismatch(next_idx);
-                    continue;
-                }
-            }
-            '(' => bracket_stack.push(PendingBracket::Round),
-            '[' => bracket_stack.push(PendingBracket::Square),
-            '{' => bracket_stack.push(PendingBracket::Curly),
+    let (mut round_sum, mut square_sum, mut curly_sum) = (0, 0, 0);
+    let mut min_max_occurrences = HashMap::<(i64, i64, i64), (usize, usize)>::with_capacity(
+        s_len * 3
+    );
+    min_max_occurrences.insert((0, 0, 0), (0, 0));
+    for (char, idx) in triple_s.chars().zip(1usize..) {
+        match char {
+            '(' => round_sum += 1,
+            ')' => round_sum -= 1,
+            '[' => square_sum += 1,
+            ']' => square_sum -= 1,
+            '{' => curly_sum += 1,
+            '}' => curly_sum -= 1,
             _ => {}
         }
-        if bracket_stack.is_empty() {
-            range_counter.shift_end(next_idx);
-            range_counter.update_best_range()
+        match min_max_occurrences.entry((round_sum, square_sum, curly_sum)) {
+            Entry::Occupied(mut entry) => {
+                let (_min_idx, max_idx) = entry.get_mut();
+                *max_idx = idx
+            }
+            Entry::Vacant(entry) => { entry.insert((idx, idx)); }
         }
     }
+    let (best_dist, best_left, best_right) = min_max_occurrences.values().fold(
+        (0, 0, 0),
+        |(mut best_dist, mut best_left, mut best_right), &(min_idx, max_idx)| {
+            let cur_dist = max_idx - min_idx;
+            if cur_dist > best_dist {
+                (best_dist, best_left, best_right) = (cur_dist, min_idx, max_idx)
+            }
+            (best_dist, best_left, best_right)
+        },
+    );
 
-    let best_substring_range = range_counter.get_best_range();
-    let result = if best_substring_range.len() < s_len {
-        &triple_s[best_substring_range]
+    let result = if best_dist < s_len {
+        &triple_s[best_left..best_right]
     } else {
         "Infinite"
     };
